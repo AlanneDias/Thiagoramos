@@ -113,6 +113,21 @@
   .result .btn{width:100%}
   .btn-dark{background:var(--black);color:var(--white)}
   .btn-dark:hover{background:#000;transform:translateY(-1px)}
+  .ac{position:relative}
+  .ac-list{position:absolute;left:0;right:0;top:100%;margin-top:4px;list-style:none;background:var(--black);border:1px solid var(--line);border-radius:10px;overflow:hidden;z-index:15;max-height:260px;overflow-y:auto}
+  .ac-list:empty{display:none}
+  .ac-list li{padding:11px 14px;font-size:.86rem;color:var(--silver);cursor:pointer;border-bottom:1px solid var(--graphite);line-height:1.35}
+  .ac-list li:last-child{border-bottom:0}
+  .ac-list li:hover,.ac-list li.on{background:var(--steel);color:var(--white)}
+  .ac-list li small{display:block;color:var(--mute);font-size:.74rem}
+  .loc{float:right;background:none;border:0;color:var(--silver);font:inherit;font-size:.68rem;letter-spacing:.06em;text-transform:none;text-decoration:underline;cursor:pointer;padding:0}
+  .auto{font-style:normal;font-size:.62rem;letter-spacing:.08em;margin-left:6px;padding:2px 7px;border:1px solid var(--line);border-radius:99px;color:var(--mute)}
+  #mapa{position:relative;z-index:0;height:0;border-radius:10px;overflow:hidden;border:1px solid transparent;transition:height .3s}
+  #mapa.show{height:260px;border-color:var(--line);margin-bottom:10px}
+  .rota-status{font-size:.82rem;color:var(--mute);margin:-6px 0 22px}
+  .rota-status.ok{color:var(--white)}
+  .rota-status.err{color:#e8a0a0}
+  .leaflet-container{background:#111!important}
   .btn.is-disabled{opacity:.35;pointer-events:none}
   .form-err{color:#e8a0a0;font-size:.85rem;margin-top:14px;min-height:0}
   .form-err:empty{display:none}
@@ -156,6 +171,8 @@
     nav .btn{display:none}
   }
 </style>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 </head>
 <body>
 
@@ -287,24 +304,29 @@
           </div>
         </div>
         <div class="row">
-          <div class="field">
-            <label for="origem">Origem</label>
-            <input type="text" id="origem" placeholder="Ex.: Aeroporto">
+          <div class="field ac">
+            <label for="origem">Origem <button type="button" class="loc" id="btnLocal">usar minha localização</button></label>
+            <input type="text" id="origem" placeholder="Digite o endereço de partida" autocomplete="off">
+            <ul class="ac-list" id="origem-list" role="listbox"></ul>
           </div>
-          <div class="field">
+          <div class="field ac">
             <label for="destino">Destino</label>
-            <input type="text" id="destino" placeholder="Ex.: Av. Paulista">
+            <input type="text" id="destino" placeholder="Digite o endereço de destino" autocomplete="off">
+            <ul class="ac-list" id="destino-list" role="listbox"></ul>
           </div>
         </div>
 
+        <div id="mapa" aria-label="Mapa da rota"></div>
+        <p class="rota-status" id="rotaStatus">Escolha origem e destino na lista: a distância e o tempo são calculados automaticamente.</p>
+
         <div class="row">
           <div class="field">
-            <label for="km">Distância</label>
-            <div class="with-unit"><input type="number" id="km" min="0" step="0.1" value="25" inputmode="decimal"><span>km</span></div>
+            <label for="km">Distância <em class="auto">automático</em></label>
+            <div class="with-unit"><input type="number" id="km" min="0" step="0.1" value="" placeholder="—" inputmode="decimal"><span>km</span></div>
           </div>
           <div class="field">
-            <label for="min">Tempo de deslocamento</label>
-            <div class="with-unit"><input type="number" id="min" min="0" step="1" value="40" inputmode="numeric"><span>min</span></div>
+            <label for="min">Tempo estimado <em class="auto">automático</em></label>
+            <div class="with-unit"><input type="number" id="min" min="0" step="1" value="" placeholder="—" inputmode="numeric"><span>min</span></div>
           </div>
         </div>
 
@@ -490,8 +512,139 @@
     a.target = "_blank"; a.rel = "noopener";
   });
   $("btnSolicitar").target = "_blank"; $("btnSolicitar").rel = "noopener";
-  $("calcForm").addEventListener("submit", e => {
+  /* ====== ROTA AUTOMÁTICA (OpenStreetMap: Photon + OSRM, sem chave de API) ====== */
+  const BASE = { lat: -7.115, lon: -34.863 };      // João Pessoa/PB — prioriza endereços próximos
+  const pontos = { origem: null, destino: null };
+  let mapa, camadaRota;
+
+  const esc = t => String(t).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
+  const status = (txt, cls = "") => { $("rotaStatus").textContent = txt; $("rotaStatus").className = "rota-status " + cls; };
+
+  function descrever(f){
+    const p = f.properties;
+    const rua = p.street ? p.street + (p.housenumber ? ", " + p.housenumber : "") : "";
+    const titulo = p.name || rua || p.city || "";
+    const sub = [p.name ? rua : "", p.district, p.city, p.state].filter((v, i, a) => v && v !== titulo && a.indexOf(v) === i).join(" · ");
+    return { titulo, sub };
+  }
+
+  async function geocodificar(q, limite = 5){
+    const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&limit=${limite + 3}&lat=${BASE.lat}&lon=${BASE.lon}`;
+    const j = await (await fetch(url)).json();
+    return j.features.filter(f => !f.properties.countrycode || f.properties.countrycode === "BR").slice(0, limite);
+  }
+
+  function selecionar(campo, f){
+    const { titulo, sub } = descrever(f);
+    $(campo).value = sub ? `${titulo} – ${sub}` : titulo;
+    pontos[campo] = { lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0] };
+    $(campo + "-list").innerHTML = "";
+    calcularRota();
+  }
+
+  function autocomplete(campo){
+    const input = $(campo), lista = $(campo + "-list");
+    let resultados = [], ativo = -1;
+    const render = () => {
+      lista.innerHTML = resultados.map((f, i) => {
+        const { titulo, sub } = descrever(f);
+        return `<li role="option" data-i="${i}" class="${i === ativo ? "on" : ""}">${esc(titulo)}${sub ? `<small>${esc(sub)}</small>` : ""}</li>`;
+      }).join("");
+    };
+    const buscar = debounce(async q => {
+      if (q.length < 3) { resultados = []; render(); return; }
+      try { resultados = await geocodificar(q); ativo = -1; render(); }
+      catch { resultados = []; render(); }
+    }, 350);
+    input.addEventListener("input", () => { pontos[campo] = null; buscar(input.value.trim()); });
+    input.addEventListener("keydown", e => {
+      if (!resultados.length || !lista.innerHTML) return;
+      if (e.key === "ArrowDown") { ativo = (ativo + 1) % resultados.length; render(); e.preventDefault(); }
+      else if (e.key === "ArrowUp") { ativo = (ativo - 1 + resultados.length) % resultados.length; render(); e.preventDefault(); }
+      else if (e.key === "Enter") { selecionar(campo, resultados[Math.max(ativo, 0)]); e.preventDefault(); }
+      else if (e.key === "Escape") { lista.innerHTML = ""; }
+    });
+    lista.addEventListener("mousedown", e => {
+      const li = e.target.closest("li"); if (li) { e.preventDefault(); selecionar(campo, resultados[+li.dataset.i]); }
+    });
+    input.addEventListener("blur", () => setTimeout(() => { lista.innerHTML = ""; }, 150));
+  }
+
+  async function garantirPonto(campo){
+    if (pontos[campo] || !$(campo).value.trim()) return;
+    const [f] = await geocodificar($(campo).value.trim(), 1);
+    if (f) pontos[campo] = { lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0] };
+  }
+
+  function desenharMapa(geo, o, d){
+    if (!window.L) return;
+    $("mapa").classList.add("show");
+    if (!mapa) {
+      mapa = L.map("mapa", { zoomControl: false, attributionControl: true });
+      L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+        attribution: "© OpenStreetMap · © CARTO", maxZoom: 19
+      }).addTo(mapa);
+    }
+    if (camadaRota) camadaRota.remove();
+    const pino = c => L.circleMarker([c.lat, c.lon], { radius: 7, color: "#0b0b0c", weight: 2, fillColor: "#f3f3f4", fillOpacity: 1 });
+    camadaRota = L.layerGroup([
+      L.geoJSON(geo, { style: { color: "#f3f3f4", weight: 4, opacity: .9 } }),
+      pino(o), pino(d)
+    ]).addTo(mapa);
+    setTimeout(() => { mapa.invalidateSize(); mapa.fitBounds(L.geoJSON(geo).getBounds(), { padding: [24, 24] }); }, 320);
+  }
+
+  let rotaSeq = 0;
+  async function calcularRota(){
+    const { origem: o, destino: d } = pontos;
+    if (!o || !d) return false;
+    const seq = ++rotaSeq;
+    status("Calculando rota…");
+    try {
+      const url = `https://router.project-osrm.org/route/v1/driving/${o.lon},${o.lat};${d.lon},${d.lat}?overview=full&geometries=geojson`;
+      const j = await (await fetch(url)).json();
+      if (seq !== rotaSeq) return false;
+      if (j.code !== "Ok" || !j.routes.length) throw new Error(j.code);
+      const r = j.routes[0];
+      const km = Math.round(r.distance / 100) / 10;
+      const min = Math.max(1, Math.ceil(r.duration / 60 * 1.15));  // +15% de margem para trânsito urbano
+      $("km").value = km; $("min").value = min;
+      status(`Rota calculada: ${km.toLocaleString("pt-BR")} km · aprox. ${fmtTempo(min)}`, "ok");
+      desenharMapa(r.geometry, o, d);
+      calcular();
+      return true;
+    } catch {
+      if (seq === rotaSeq) status("Não foi possível calcular a rota. Informe a distância e o tempo manualmente.", "err");
+      return false;
+    }
+  }
+
+  autocomplete("origem");
+  autocomplete("destino");
+
+  $("btnLocal").addEventListener("click", () => {
+    if (!navigator.geolocation) return status("Seu navegador não permite localização.", "err");
+    status("Obtendo sua localização…");
+    navigator.geolocation.getCurrentPosition(async pos => {
+      const { latitude: lat, longitude: lon } = pos.coords;
+      pontos.origem = { lat, lon };
+      $("origem").value = "Minha localização";
+      try {
+        const j = await (await fetch(`https://photon.komoot.io/reverse?lat=${lat}&lon=${lon}`)).json();
+        if (j.features[0]) { const { titulo, sub } = descrever(j.features[0]); $("origem").value = sub ? `${titulo} – ${sub}` : titulo; }
+      } catch {}
+      if (!(await calcularRota())) status("Localização definida. Agora escolha o destino.", "ok");
+    }, () => status("Não foi possível obter sua localização.", "err"), { enableHighAccuracy: true, timeout: 10000 });
+  });
+
+  $("calcForm").addEventListener("submit", async e => {
     e.preventDefault();
+    if ((!pontos.origem || !pontos.destino) && $("origem").value.trim() && $("destino").value.trim()) {
+      status("Localizando endereços…");
+      try { await garantirPonto("origem"); await garantirPonto("destino"); await calcularRota(); }
+      catch { status("Não foi possível localizar os endereços. Informe a distância e o tempo manualmente.", "err"); }
+    }
     if (!validar()) return;
     simulado = true;
     calcular();
