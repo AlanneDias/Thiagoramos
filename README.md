@@ -8,7 +8,7 @@ Edite o bloco `TARIFA` no final do `index.html`:
 
 | Campo | Descrição |
 |---|---|
-| `whatsapp` | Número com DDI + DDD, só dígitos (ex.: `5511999999999`) |
+| `whatsapp` | Número com DDI + DDD, só dígitos (atual: `5583986549168`) |
 | `bandeirada` | Taxa fixa de partida (R$) |
 | `porKm` | Valor por km rodado (R$) |
 | `porMinuto` | Valor por minuto de deslocamento (R$) |

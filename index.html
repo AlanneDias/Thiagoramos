@@ -113,6 +113,10 @@
   .result .btn{width:100%}
   .btn-dark{background:var(--black);color:var(--white)}
   .btn-dark:hover{background:#000;transform:translateY(-1px)}
+  .btn.is-disabled{opacity:.35;pointer-events:none}
+  .form-err{color:#e8a0a0;font-size:.85rem;margin-top:14px;min-height:0}
+  .form-err:empty{display:none}
+  input[type=datetime-local]{color-scheme:dark;width:100%;background:var(--black);border:1px solid var(--line);color:var(--white);padding:13px 16px;border-radius:10px;font-size:1rem;font-family:inherit;outline:none}
   .rates{margin-top:18px;font-size:.74rem;color:#6b6e74;line-height:1.7}
 
   /* VEHICLE */
@@ -271,7 +275,17 @@
     </div>
 
     <div class="calc">
-      <form class="panel" id="calcForm" onsubmit="return false">
+      <form class="panel" id="calcForm" novalidate>
+        <div class="row">
+          <div class="field">
+            <label for="nome">Seu nome</label>
+            <input type="text" id="nome" placeholder="Nome completo" autocomplete="name">
+          </div>
+          <div class="field">
+            <label for="quando">Data e horário</label>
+            <input type="datetime-local" id="quando">
+          </div>
+        </div>
         <div class="row">
           <div class="field">
             <label for="origem">Origem</label>
@@ -319,14 +333,16 @@
             </label>
           </div>
         </div>
+        <p class="form-err" id="formErr" role="alert"></p>
+        <button type="submit" class="btn btn-light" style="width:100%;margin-top:22px">Simular corrida</button>
       </form>
 
       <aside class="result" aria-live="polite">
         <span class="eyebrow">Valor estimado</span>
-        <div class="total" id="total">R$ 0,00</div>
-        <div class="total-note" id="resumo">—</div>
+        <div class="total" id="total">R$ —</div>
+        <div class="total-note" id="resumo">Preencha os dados e clique em “Simular corrida”.</div>
         <ul class="breakdown" id="breakdown"></ul>
-        <a href="#" class="btn btn-dark" id="btnSolicitar">Solicitar pelo WhatsApp</a>
+        <a href="#" class="btn btn-dark is-disabled" id="btnSolicitar" aria-disabled="true">Enviar simulação ao Thiago (WhatsApp)</a>
         <p class="rates" id="rates"></p>
       </aside>
     </div>
@@ -362,7 +378,7 @@
       </div>
       <div style="display:flex;flex-wrap:wrap;gap:12px">
         <a href="#" class="btn btn-light js-wa">WhatsApp</a>
-        <a href="mailto:contato@exemplo.com" class="btn btn-ghost">E‑mail</a>
+        <a href="https://www.instagram.com/thiagoemoa.corporativo/" target="_blank" rel="noopener" class="btn btn-ghost">Instagram @thiagoemoa.corporativo</a>
       </div>
     </div>
   </div>
@@ -370,7 +386,7 @@
 
 <footer>
   <div class="wrap">
-    <span>© <span id="ano"></span> Thiago Ramos · Transporte Executivo e Corporativo</span>
+    <span>© <span id="ano"></span> Thiago Ramos · Transporte Executivo e Corporativo · WhatsApp (83) 98654-9168 · <a href="https://www.instagram.com/thiagoemoa.corporativo/" target="_blank" rel="noopener" style="color:var(--silver)">@thiagoemoa.corporativo</a></span>
     <span>Valores da calculadora são estimativas e podem variar conforme trânsito e rota.</span>
   </div>
 </footer>
@@ -382,7 +398,7 @@
 <script>
   /* ====== CONFIGURAÇÃO DE TARIFAS (edite aqui) ====== */
   const TARIFA = {
-    whatsapp: "5500000000000",   // DDI + DDD + número, só dígitos
+    whatsapp: "5583986549168",   // (83) 98654-9168 — DDI + DDD + número, só dígitos
     bandeirada: 15.00,           // taxa fixa de partida (R$)
     porKm: 3.20,                 // valor por km rodado (R$)
     porMinuto: 0.90,             // valor por minuto de deslocamento (R$)
@@ -399,7 +415,17 @@
   const num = id => Math.max(0, parseFloat(String($(id).value).replace(",", ".")) || 0);
   const fmtTempo = m => { const h = Math.floor(m/60), r = m%60; return h ? `${h}h${r?String(r).padStart(2,"0"):""}` : `${r} min`; };
 
-  let mensagem = "";
+  let simulado = false;
+
+  function validar(){
+    const faltando = [];
+    if (!$("origem").value.trim()) faltando.push("origem");
+    if (!$("destino").value.trim()) faltando.push("destino");
+    if (num("km") <= 0) faltando.push("distância");
+    if (num("min") <= 0) faltando.push("tempo de deslocamento");
+    $("formErr").textContent = faltando.length ? `Informe: ${faltando.join(", ")}.` : "";
+    return !faltando.length;
+  }
 
   function calcular(){
     const km = num("km"), min = num("min"), espera = +$("espera").value;
@@ -407,6 +433,7 @@
     const mult = tipo === "2" ? 2 : 1;
 
     $("esperaLbl").textContent = espera ? fmtTempo(espera) : "Sem espera";
+    if (!simulado) return;
 
     const itens = [];
     const add = (nome, v) => { if (v > 0) itens.push([nome, v]); };
@@ -434,13 +461,24 @@
       + (minimoAplicado ? `<li class="min"><span>Valor mínimo aplicado</span><b>${brl(TARIFA.minimo)}</b></li>` : "");
 
     const tipoTxt = {1:"Somente ida",2:"Ida e volta",3:"Aeroporto"}[tipo];
-    const o = $("origem").value.trim(), d = $("destino").value.trim();
-    mensagem = `Olá, Thiago! Gostaria de solicitar uma corrida.\n`
-      + (o ? `Origem: ${o}\n` : "") + (d ? `Destino: ${d}\n` : "")
-      + `Trajeto: ${tipoTxt}\nDistância: ${km} km · Tempo: ${fmtTempo(min)}`
-      + (espera ? `\nEspera: ${fmtTempo(espera)}` : "")
-      + `\nValor estimado: ${brl(total)}`;
+    const nome = $("nome").value.trim(), quando = $("quando").value;
+    const quandoTxt = quando ? new Date(quando).toLocaleString("pt-BR",{dateStyle:"short",timeStyle:"short"}) : "";
+    const mensagem = [
+      "*SIMULAÇÃO DE CORRIDA*",
+      nome ? `Cliente: ${nome}` : null,
+      quandoTxt ? `Data/horário: ${quandoTxt}` : null,
+      `Origem: ${$("origem").value.trim()}`,
+      `Destino: ${$("destino").value.trim()}`,
+      `Trajeto: ${tipoTxt}`,
+      "",
+      ...itens.map(([n,v]) => `• ${n}: ${brl(v)}`),
+      minimoAplicado ? `• Valor mínimo aplicado: ${brl(TARIFA.minimo)}` : null,
+      "",
+      `*Total estimado: ${brl(total)}*`
+    ].filter(l => typeof l === "string").join("\n"); // descarta linhas opcionais não preenchidas (null)
     $("btnSolicitar").href = waLink(mensagem);
+    $("btnSolicitar").classList.remove("is-disabled");
+    $("btnSolicitar").removeAttribute("aria-disabled");
   }
 
   const waLink = (txt) => `https://wa.me/${TARIFA.whatsapp}?text=${encodeURIComponent(txt)}`;
@@ -452,6 +490,13 @@
     a.target = "_blank"; a.rel = "noopener";
   });
   $("btnSolicitar").target = "_blank"; $("btnSolicitar").rel = "noopener";
+  $("calcForm").addEventListener("submit", e => {
+    e.preventDefault();
+    if (!validar()) return;
+    simulado = true;
+    calcular();
+    if (window.innerWidth < 900) document.querySelector(".result").scrollIntoView({behavior:"smooth"});
+  });
   $("calcForm").addEventListener("input", calcular);
   $("calcForm").addEventListener("change", calcular);
   $("ano").textContent = new Date().getFullYear();
