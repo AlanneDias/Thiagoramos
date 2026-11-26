@@ -55,7 +55,7 @@
   .hero h1 em{font-style:normal;color:var(--mute)}
   .hero p.lead{max-width:470px;color:var(--silver);font-weight:300;font-size:1.05rem}
   .hero-ctas{display:flex;flex-wrap:wrap;gap:12px;margin-top:34px}
-  .car{width:100%;height:auto;filter:drop-shadow(0 30px 40px rgba(0,0,0,.6))}
+  .car{display:block;width:100%;height:auto;border-radius:var(--radius);border:1px solid var(--line);box-shadow:0 30px 60px rgba(0,0,0,.55)}
   .car-tag{display:flex;justify-content:space-between;border-top:1px solid var(--line);margin-top:10px;padding-top:14px;font-size:.78rem;color:var(--mute)}
   .car-tag strong{color:var(--white);font-weight:500;letter-spacing:.04em}
 
@@ -206,29 +206,7 @@
       </div>
     </div>
     <div>
-      <!-- Silhueta estilizada de SUV (substituir por foto real do veículo) -->
-      <svg class="car" viewBox="0 0 640 300" aria-label="Ilustração de SUV">
-        <defs>
-          <linearGradient id="body" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stop-color="#5a5d63"/><stop offset=".5" stop-color="#2b2d31"/><stop offset="1" stop-color="#111214"/>
-          </linearGradient>
-          <linearGradient id="glass" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0" stop-color="#3b3e44"/><stop offset="1" stop-color="#0d0e10"/>
-          </linearGradient>
-          <radialGradient id="shadow" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#000" stop-opacity=".8"/><stop offset="1" stop-color="#000" stop-opacity="0"/></radialGradient>
-        </defs>
-        <ellipse cx="320" cy="262" rx="290" ry="22" fill="url(#shadow)"/>
-        <path d="M40 210 C40 180 60 165 95 160 L170 150 C205 112 245 88 300 84 L420 84 C470 86 505 110 540 148 L585 158 C605 164 612 180 612 200 L612 222 C612 232 604 238 594 238 L52 238 C44 238 40 230 40 222 Z" fill="url(#body)"/>
-        <path d="M190 150 C220 118 252 100 300 97 L410 97 C452 99 482 118 512 150 Z" fill="url(#glass)"/>
-        <path d="M352 97 L346 150" stroke="#1b1c1f" stroke-width="5"/>
-        <path d="M60 196 L600 192" stroke="#76797f" stroke-width="1" opacity=".5"/>
-        <rect x="560" y="166" width="44" height="7" rx="3" fill="#e6e7e9"/>
-        <rect x="44" y="172" width="34" height="6" rx="3" fill="#9a2b2b" opacity=".8"/>
-        <g>
-          <circle cx="160" cy="236" r="40" fill="#0a0a0b"/><circle cx="160" cy="236" r="25" fill="#3a3c41"/><circle cx="160" cy="236" r="8" fill="#9ea1a6"/>
-          <circle cx="490" cy="236" r="40" fill="#0a0a0b"/><circle cx="490" cy="236" r="25" fill="#3a3c41"/><circle cx="490" cy="236" r="8" fill="#9ea1a6"/>
-        </g>
-      </svg>
+      <img class="car" src="img/geely-ex5.jpg" srcset="img/geely-ex5-800.jpg 800w, img/geely-ex5.jpg 1600w" sizes="(max-width:900px) 100vw, 560px" width="1600" height="900" alt="Geely EX5 EM-i preto, veículo do transporte executivo Thiago Ramos" fetchpriority="high">
       <div class="car-tag"><span>Veículo</span><strong>GEELY EX5 EM-i · SUV Híbrido</strong></div>
     </div>
   </div>
